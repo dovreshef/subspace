@@ -13,6 +13,7 @@ import (
 	"github.com/crewjam/saml/samlsp"
 	"github.com/julienschmidt/httprouter"
 	"github.com/pquerna/otp/totp"
+	"github.com/subspacecommunity/subspace/cmd/subspace/cli"
 	"golang.org/x/crypto/bcrypt"
 
 	qrcode "github.com/skip2/go-qrcode"
@@ -414,54 +415,18 @@ func profileAddHandler(w *Web) {
 		return
 	}
 
-	ipv4Pref := "10.99.97."
-	if pref := getEnv("SUBSPACE_IPV4_PREF", "nil"); pref != "nil" {
-		ipv4Pref = pref
-	}
-	ipv4Gw := "10.99.97.1"
-	if gw := getEnv("SUBSPACE_IPV4_GW", "nil"); gw != "nil" {
-		ipv4Gw = gw
-	}
-	ipv4Cidr := "24"
-	if cidr := getEnv("SUBSPACE_IPV4_CIDR", "nil"); cidr != "nil" {
-		ipv4Cidr = cidr
-	}
-	ipv6Pref := "fd00::10:97:"
-	if pref := getEnv("SUBSPACE_IPV6_PREF", "nil"); pref != "nil" {
-		ipv6Pref = pref
-	}
-	ipv6Gw := "fd00::10:97:1"
-	if gw := getEnv("SUBSPACE_IPV6_GW", "nil"); gw != "nil" {
-		ipv6Gw = gw
-	}
-	ipv6Cidr := "64"
-	if cidr := getEnv("SUBSPACE_IPV6_CIDR", "nil"); cidr != "nil" {
-		ipv6Cidr = cidr
-	}
-	listenport := "51820"
-	if port := getEnv("SUBSPACE_LISTENPORT", "nil"); port != "nil" {
-		listenport = port
-	}
-	endpointHost := httpHost
-	if eh := getEnv("SUBSPACE_ENDPOINT_HOST", "nil"); eh != "nil" {
-		endpointHost = eh
-	}
-	allowedips := "0.0.0.0/0, ::/0"
-	if ips := getEnv("SUBSPACE_ALLOWED_IPS", "nil"); ips != "nil" {
-		allowedips = ips
-	}
-	ipv4Enabled := true
-	if enable := getEnv("SUBSPACE_IPV4_NAT_ENABLED", "1"); enable == "0" {
-		ipv4Enabled = false
-	}
-	ipv6Enabled := true
-	if enable := getEnv("SUBSPACE_IPV6_NAT_ENABLED", "1"); enable == "0" {
-		ipv6Enabled = false
-	}
-	disableDNS := false
-	if shouldDisableDNS := getEnv("SUBSPACE_DISABLE_DNS", "0"); shouldDisableDNS == "1" {
-		disableDNS = true
-	}
+	ipv4Pref := cli.StartupConfig.Ipv4Pref
+	ipv4Gw := cli.StartupConfig.Ipv4Gw
+	ipv4Cidr := cli.StartupConfig.Ipv4Cidr
+	ipv6Pref := cli.StartupConfig.Ipv6Pref
+	ipv6Gw := cli.StartupConfig.Ipv6Gw
+	ipv6Cidr := cli.StartupConfig.Ipv6Cidr
+	listenport := cli.StartupConfig.ListenPort
+	endpointHost := cli.StartupConfig.EndpointHost
+	allowedips := cli.StartupConfig.AllowedIps
+	ipv4Enabled := cli.StartupConfig.Ipv4NatEnabled
+	ipv6Enabled := cli.StartupConfig.Ipv6NatEnabled
+	disableDNS := cli.StartupConfig.DisableDns
 
 	script := `
 cd {{$.Datadir}}/wireguard
@@ -509,7 +474,7 @@ WGCLIENT
 	}{
 		profile,
 		endpointHost,
-		datadir,
+		cli.StartupConfig.DataDir,
 		ipv4Gw,
 		ipv6Gw,
 		ipv4Pref,
@@ -695,7 +660,7 @@ rm clients/{{$.Profile.ID}}.conf
 		Datadir string
 		Profile Profile
 	}{
-		datadir,
+		cli.StartupConfig.DataDir,
 		profile,
 	})
 	if err != nil {

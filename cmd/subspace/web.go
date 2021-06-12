@@ -14,6 +14,7 @@ import (
 	"github.com/crewjam/saml"
 	"github.com/crewjam/saml/samlsp"
 	"github.com/pquerna/otp"
+	"github.com/subspacecommunity/subspace/cmd/subspace/cli"
 
 	"golang.org/x/net/publicsuffix"
 
@@ -153,9 +154,9 @@ func WebHandler(h func(*Web), section string) httprouter.Handle {
 			ps:       ps,
 			template: section + ".html",
 
-			Backlink:      backlink,
+			Backlink:      cli.StartupConfig.Backlink,
 			Time:          time.Now(),
-			Version:       version,
+			Version:       cli.Version,
 			Request:       r,
 			Section:       section,
 			Info:          config.FindInfo(),
@@ -306,8 +307,8 @@ func (w *Web) SignoutSession() {
 			Value:    "",
 			Path:     "/",
 			HttpOnly: true,
-			Domain:   httpHost,
-			Secure:   !httpInsecure,
+			Domain:   cli.StartupConfig.HttpHost,
+			Secure:   !cli.StartupConfig.HttpInsecure,
 			MaxAge:   -1,
 			Expires:  time.Unix(1, 0),
 		})
@@ -317,8 +318,8 @@ func (w *Web) SignoutSession() {
 		Value:    "",
 		Path:     "/",
 		HttpOnly: true,
-		Domain:   httpHost,
-		Secure:   !httpInsecure,
+		Domain:   cli.StartupConfig.HttpHost,
+		Secure:   !cli.StartupConfig.HttpInsecure,
 		MaxAge:   -1,
 		Expires:  time.Unix(1, 0),
 	})
@@ -341,8 +342,8 @@ func (w *Web) SigninSession(admin bool, userID string) error {
 		Value:    encoded,
 		Path:     "/",
 		HttpOnly: true,
-		Domain:   httpHost,
-		Secure:   !httpInsecure,
+		Domain:   cli.StartupConfig.HttpHost,
+		Secure:   !cli.StartupConfig.HttpInsecure,
 		Expires:  expires,
 	})
 	return nil

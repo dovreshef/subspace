@@ -7,18 +7,17 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/xml"
-	"flag"
 	"fmt"
 	"net"
 	"net/http"
 	"net/url"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/julienschmidt/httprouter"
 	"github.com/pquerna/otp"
+	"github.com/subspacecommunity/subspace/cmd/subspace/cli"
 
 	"github.com/crewjam/saml"
 	"github.com/crewjam/saml/samlsp"
@@ -28,38 +27,6 @@ import (
 )
 
 var (
-	// Flags
-	cli = flag.NewFlagSet(os.Args[0], flag.ExitOnError)
-
-	// datadir
-	datadir string
-
-	// The version is set by the build command.
-	version string
-
-	// httpd
-	httpAddr   string
-	httpHost   string
-	httpPrefix string
-
-	// Insecure http cookies (only recommended for internal LANs/VPNs)
-	httpInsecure bool
-
-	// backlink
-	backlink string
-
-	// show version
-	showVersion bool
-
-	// show help
-	showHelp bool
-
-	// debug logging
-	debug bool
-
-	// Let's Encrypt
-	letsencrypt bool
-
 	// securetoken
 	securetoken *securecookie.SecureCookie
 
@@ -85,65 +52,20 @@ var (
 	tempTotpKey *otp.Key
 )
 
-func init() {
-	cli.StringVar(&datadir, "datadir", "/data", "data dir")
-	cli.StringVar(&backlink, "backlink", "/", "backlink (optional)")
-	cli.StringVar(&httpHost, "http-host", "", "HTTP host")
-	cli.StringVar(&httpAddr, "http-addr", ":80", "HTTP listen address")
-	cli.BoolVar(&httpInsecure, "http-insecure", false, "enable sessions cookies for http (no https) not recommended")
-	cli.BoolVar(&letsencrypt, "letsencrypt", true, "enable TLS using Let's Encrypt on port 443")
-	cli.BoolVar(&showVersion, "version", false, "display version and exit")
-	cli.BoolVar(&showHelp, "help", false, "display help and exit")
-	cli.BoolVar(&debug, "debug", false, "debug mode")
-	cli.StringVar(&semanticTheme, "theme", "green", "Semantic-ui theme to use")
-}
-
 func main() {
-	var err error
-
-	cli.Parse(os.Args[1:])
-	usage := func(msg string) {
-		if msg != "" {
-			fmt.Fprintf(os.Stderr, "ERROR: %s\n", msg)
-		}
-		fmt.Fprintf(os.Stderr, "Usage: %s --http-host subspace.example.com\n\n", os.Args[0])
-		cli.PrintDefaults()
-	}
-
-	if showHelp {
-		usage("Help info")
-		os.Exit(0)
-	}
-
-	if showVersion {
-		fmt.Printf("Subspace %s\n", version)
-		os.Exit(0)
-	}
-
-	// http host
-	if httpHost == "" {
-		usage("--http-host flag is required")
-		os.Exit(1)
-	}
-
-	// debug logging
-	logger.Out = os.Stdout
-	if debug {
-		logger.SetLevel(log.DebugLevel)
-	}
-	logger.Debugf("debug logging is enabled")
+	cli.SetStartupConfig()
 
 	// http port
-	httpIP, httpPort, err := net.SplitHostPort(httpAddr)
+	httpIP, httpPort, err := net.SplitHostPort(cli.StartupConfig.HttpAddr)
 	if err != nil {
-		usage("invalid --http-addr: " + err.Error())
+		logger.Fatalf("invalid --http-addr: %s", err.Error())
 	}
 
 	// Clean datadir path.
-	datadir = filepath.Clean(datadir)
+	cli.StartupConfig.DataDir = filepath.Clean(cli.StartupConfig.DataDir)
 
 	// config
-	config, err = NewConfig("config.json")
+	config, err := NewConfig("config.json")
 	if err != nil {
 		logger.Fatal(err)
 	}
@@ -212,7 +134,7 @@ func main() {
 	maxHeaderBytes := 10 * (1024 * 1024)
 
 	// Plain text web server for use behind a reverse proxy.
-	if !letsencrypt {
+	if !cli.StartupConfig.LetsEncrypt {
 		httpd := &http.Server{
 			Handler:        r,
 			Addr:           net.JoinHostPort(httpIP, httpPort),
@@ -220,14 +142,14 @@ func main() {
 			ReadTimeout:    httpTimeout,
 			MaxHeaderBytes: maxHeaderBytes,
 		}
-		hostport := net.JoinHostPort(httpHost, httpPort)
+		hostport := net.JoinHostPort(cli.StartupConfig.HttpHost, httpPort)
 		if httpPort == "80" {
-			hostport = httpHost
+			hostport = cli.StartupConfig.HttpHost
 		}
-		logger.Infof("Subspace version: %s %s", version, &url.URL{
+		logger.Infof("Subspace version: %s %s", cli.Version, &url.URL{
 			Scheme: "http",
 			Host:   hostport,
-			Path:   httpPrefix,
+			Path:   "/",
 		})
 		logger.Fatal(httpd.ListenAndServe())
 	}
@@ -237,10 +159,10 @@ func main() {
 	// autocert
 	certmanager := autocert.Manager{
 		Prompt: autocert.AcceptTOS,
-		Cache:  autocert.DirCache(filepath.Join(datadir, "letsencrypt")),
+		Cache:  autocert.DirCache(filepath.Join(cli.StartupConfig.DataDir, "letsencrypt")),
 		HostPolicy: func(_ context.Context, host string) error {
 			host = strings.TrimPrefix(host, "www.")
-			if host == httpHost {
+			if host == cli.StartupConfig.HttpHost {
 				return nil
 			}
 			if host == config.FindInfo().Domain {
@@ -255,7 +177,7 @@ func main() {
 		redir := httprouter.New()
 		redir.GET("/*path", func(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 			r.URL.Scheme = "https"
-			r.URL.Host = httpHost
+			r.URL.Host = cli.StartupConfig.HttpHost
 			http.Redirect(w, r, r.URL.String(), http.StatusFound)
 		})
 
@@ -292,30 +214,30 @@ func main() {
 	// Override default for TLS.
 	if httpPort == "80" {
 		httpPort = "443"
-		httpAddr = net.JoinHostPort(httpIP, httpPort)
+		cli.StartupConfig.HttpAddr = net.JoinHostPort(httpIP, httpPort)
 	}
 
 	httpsd := &http.Server{
 		Handler:        r,
-		Addr:           httpAddr,
+		Addr:           cli.StartupConfig.HttpAddr,
 		WriteTimeout:   httpTimeout,
 		ReadTimeout:    httpTimeout,
 		MaxHeaderBytes: maxHeaderBytes,
 	}
 
 	// Enable TCP keep alives on the TLS connection.
-	tcpListener, err := net.Listen("tcp", httpAddr)
+	tcpListener, err := net.Listen("tcp", cli.StartupConfig.HttpAddr)
 	if err != nil {
 		logger.Fatalf("listen failed: %s", err)
 		return
 	}
 	tlsListener := tls.NewListener(tcpKeepAliveListener{tcpListener.(*net.TCPListener)}, &tlsConfig)
 
-	hostport := net.JoinHostPort(httpHost, httpPort)
+	hostport := net.JoinHostPort(cli.StartupConfig.HttpHost, httpPort)
 	if httpPort == "443" {
-		hostport = httpHost
+		hostport = cli.StartupConfig.HttpHost
 	}
-	logger.Infof("Subspace version: %s %s", version, &url.URL{
+	logger.Infof("Subspace version: %s %s", cli.Version, &url.URL{
 		Scheme: "https",
 		Host:   hostport,
 		Path:   "/",
@@ -376,11 +298,11 @@ func configureSAML() error {
 
 	rootURL := url.URL{
 		Scheme: "https",
-		Host:   httpHost,
+		Host:   cli.StartupConfig.HttpHost,
 		Path:   "/",
 	}
 
-	if httpInsecure {
+	if cli.StartupConfig.HttpInsecure {
 		rootURL.Scheme = "http"
 	}
 
@@ -390,8 +312,8 @@ func configureSAML() error {
 		Certificate:       keyPair.Leaf,
 		IDPMetadata:       entity,
 		CookieName:        SessionCookieNameSSO,
-		CookieDomain:      httpHost, // TODO: this will break if using a custom domain.
-		CookieSecure:      !httpInsecure,
+		CookieDomain:      cli.StartupConfig.HttpHost, // TODO: this will break if using a custom domain.
+		CookieSecure:      !cli.StartupConfig.HttpInsecure,
 		Logger:            logger,
 		AllowIDPInitiated: true,
 	})

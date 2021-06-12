@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/pquerna/otp/totp"
+	"github.com/subspacecommunity/subspace/cmd/subspace/cli"
 )
 
 var (
@@ -52,7 +53,7 @@ func (p Profile) NameClean() string {
 }
 
 func (p Profile) WireGuardConfigPath() string {
-	return fmt.Sprintf("%s/wireguard/clients/%s.conf", datadir, p.ID)
+	return fmt.Sprintf("%s/wireguard/clients/%s.conf", cli.StartupConfig.DataDir, p.ID)
 }
 
 func (p Profile) WireGuardConfigName() string {
@@ -95,14 +96,14 @@ type Config struct {
 }
 
 func NewConfig(filename string) (*Config, error) {
-	filename = filepath.Join(datadir, filename)
+	filename = filepath.Join(cli.StartupConfig.DataDir, filename)
 	c := &Config{filename: filename}
 	b, err := ioutil.ReadFile(filename)
 
 	// Create new config with defaults
 	if os.IsNotExist(err) {
 		c.Info = &Info{
-			Email: "null",
+			Email:    "null",
 			HashKey:  RandomString(32),
 			BlockKey: RandomString(32),
 		}
@@ -155,7 +156,7 @@ func (c *Config) generateSAMLKeyPair() error {
 		NotAfter:     time.Now().AddDate(5, 0, 0),
 		SerialNumber: serialNumber,
 		Subject: pkix.Name{
-			CommonName:   httpHost,
+			CommonName:   cli.StartupConfig.HttpHost,
 			Organization: []string{"Subspace"},
 		},
 		BasicConstraintsValid: true,
@@ -443,7 +444,7 @@ func (c *Config) ResetTotp() error {
 func (c *Config) GenerateTOTP() error {
 	key, err := totp.Generate(
 		totp.GenerateOpts{
-			Issuer:      httpHost,
+			Issuer:      cli.StartupConfig.HttpHost,
 			AccountName: c.Info.Email,
 		},
 	)

@@ -11,7 +11,7 @@ help:  ## Display this help message and exit
 build: clean bindata.go ## Build the binary
 	@echo "Compiling subspace..."
 	@CGO_ENABLED=0 \
-		go build -v --compiler gc --ldflags "-extldflags -static -s -w -X main.version=${BUILD_VERSION}" -o subspace ./cmd/subspace \
+		go build -v --compiler gc --ldflags "-extldflags -static -s -w -X github.com/subspacecommunity/subspace/cmd/subspace/cli.Version=${BUILD_VERSION}" -o subspace ./cmd/subspace \
 			&& rm cmd/subspace/bindata.go
 	@echo "+++ subspace compiled"
 

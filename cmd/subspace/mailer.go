@@ -10,6 +10,7 @@ import (
 	"time"
 
 	humanize "github.com/dustin/go-humanize"
+	"github.com/subspacecommunity/subspace/cmd/subspace/cli"
 	gomail "gopkg.in/gomail.v2"
 )
 
@@ -31,7 +32,7 @@ func (m *Mailer) Forgot(email, secret string) error {
 		Email    string
 		Secret   string
 	}{
-		httpHost,
+		cli.StartupConfig.HttpHost,
 		email,
 		secret,
 	}
@@ -53,7 +54,7 @@ func (m *Mailer) sendmail(tmpl, to, subject string, data interface{}) error {
 	password := cfg.Password
 
 	if from == "" {
-		from = fmt.Sprintf("Subspace <subspace@%s>", httpHost)
+		from = fmt.Sprintf("Subspace <subspace@%s>", cli.StartupConfig.HttpHost)
 	}
 
 	if server == "" {
